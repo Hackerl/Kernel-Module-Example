@@ -22,3 +22,6 @@ add_custom_command(OUTPUT ${DRIVER_FILE}
         DEPENDS ${SOURCE_FILES} VERBATIM)
 
 add_custom_target(driver ALL DEPENDS ${DRIVER_FILE})
+
+# puppet target for clion parse symbols
+# add_library(puppet STATIC ${SOURCE_FILES})
