@@ -1,11 +1,11 @@
 #include <linux/module.h>
-#include <linux/kernel.h>
+#include "data_pipe.h"
 
 int init_module() {
-    printk(KERN_INFO "hello world.\n");
+    init_data_pipe("lkm_demo");
     return 0;
 }
 
 void cleanup_module() {
-    printk(KERN_INFO "goodbye world.\n");
+    cleanup_data_pipe("lkm_demo");
 }

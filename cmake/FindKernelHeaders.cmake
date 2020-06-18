@@ -6,10 +6,11 @@ execute_process(
 )
 
 # Find the headers
-find_path(KERNEL_HEADERS_DIR
+find_path(
+        KERNEL_HEADERS_DIR
         include/linux/user.h
         PATHS /lib/modules/${KERNEL_RELEASE}/build
-        )
+)
 
 execute_process(
         COMMAND readlink -fn ${KERNEL_HEADERS_DIR}
