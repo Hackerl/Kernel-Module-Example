@@ -9,7 +9,7 @@ execute_process(
 find_path(
         KERNEL_HEADERS_DIR
         include/linux/user.h
-        PATHS /lib/modules/${KERNEL_RELEASE}/build
+        PATHS /lib/modules/${KERNEL_RELEASE}/source
 )
 
 execute_process(
