@@ -10,10 +10,10 @@ ssize_t read_data_pipe(struct file *f, char __user *buffer, size_t count, loff_t
 int release_data_pipe(struct inode *node, struct file *f);
 
 struct ring_buffer_ctx {
+    unsigned long size;
+    struct circ_buf ring;
     spinlock_t producer_lock;
     spinlock_t consumer_lock;
-    struct circ_buf ring;
-    unsigned long size;
 };
 
 static struct ring_buffer_ctx data_pipe_buffer_ctx = {};
@@ -88,8 +88,8 @@ unsigned long push_data(void *buffer, unsigned long length) {
 
     if (CIRC_SPACE(head, tail, size) >= length) {
         ret = length;
-        memcpy(buffer, data_pipe_buffer_ctx.ring.buf, length);
-        smp_store_release(&data_pipe_buffer_ctx.ring.head, (head + 1) & (size - 1));
+        memcpy(data_pipe_buffer_ctx.ring.buf + head, buffer, length);
+        smp_store_release(&data_pipe_buffer_ctx.ring.head, (head + length) & (size - 1));
     }
 
     spin_unlock(&data_pipe_buffer_ctx.producer_lock);
@@ -109,8 +109,8 @@ unsigned long pop_data(void *buffer, unsigned long length) {
 
     if (CIRC_CNT(head, tail, size) >= length) {
         ret = length;
-        memcpy(data_pipe_buffer_ctx.ring.buf, buffer, length);
-        smp_store_release(&data_pipe_buffer_ctx.ring.tail,(tail + 1) & (size - 1));
+        memcpy(buffer, data_pipe_buffer_ctx.ring.buf + tail, length);
+        smp_store_release(&data_pipe_buffer_ctx.ring.tail, (tail + length) & (size - 1));
     }
 
     spin_unlock(&data_pipe_buffer_ctx.consumer_lock);
