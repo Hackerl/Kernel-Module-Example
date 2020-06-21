@@ -44,7 +44,7 @@ int init_data_pipe(const char *name) {
     if (!parent_dir)
         return -1;
 
-    if (!proc_create("data_pipe", S_IRUSR, parent_dir,
+    if (!proc_create("data_pipe", S_IRUSR | S_IWUSR, parent_dir,
             &data_pipe_fops)) {
         remove_proc_subtree(name, NULL);
         return -1;
@@ -64,7 +64,7 @@ ssize_t read_data_pipe(struct file *f, char __user *buffer, size_t count, loff_t
 
     cache_buffer = kzalloc(count, GFP_KERNEL);
 
-    ret = pop_data(cache_buffer, count);
+    ret = pop_data(cache_buffer, count, 1);
 
     if (ret > 0) {
         ret = copy_to_user(buffer, cache_buffer, count) == 0 ? ret : 0;
@@ -85,7 +85,7 @@ ssize_t write_data_pipe(struct file *f, const char __user *buffer, size_t count,
     cache_buffer = kzalloc(count, GFP_KERNEL);
 
     if (copy_from_user(cache_buffer, buffer, count) == 0) {
-        ret = push_data(cache_buffer, count);
+        ret = push_data(cache_buffer, count, 1);
     }
 
     if (cache_buffer) {
@@ -107,8 +107,9 @@ int cleanup_data_pipe(const char *name) {
     return 0;
 }
 
-unsigned long push_data(void *buffer, unsigned long length) {
+unsigned long push_data(void *buffer, unsigned long length, int part_mode) {
     unsigned long ret = 0;
+    unsigned long space = 0;
     unsigned long size, head, tail = 0;
 
     spin_lock(&data_pipe_buffer_ctx.producer_lock);
@@ -117,10 +118,12 @@ unsigned long push_data(void *buffer, unsigned long length) {
     head = data_pipe_buffer_ctx.ring.head;
     tail = READ_ONCE(data_pipe_buffer_ctx.ring.tail);
 
-    if (CIRC_SPACE(head, tail, size) >= length) {
-        ret = length;
-        memcpy(data_pipe_buffer_ctx.ring.buf + head, buffer, length);
-        smp_store_release(&data_pipe_buffer_ctx.ring.head, (head + length) & (size - 1));
+    space = CIRC_SPACE(head, tail, size);
+    ret = part_mode ? min(space, length) : (space >= length ? space : 0);
+
+    if (ret > 0) {
+        memcpy(data_pipe_buffer_ctx.ring.buf + head, buffer, ret);
+        smp_store_release(&data_pipe_buffer_ctx.ring.head, (head + ret) & (size - 1));
     }
 
     spin_unlock(&data_pipe_buffer_ctx.producer_lock);
@@ -128,8 +131,9 @@ unsigned long push_data(void *buffer, unsigned long length) {
     return ret;
 }
 
-unsigned long pop_data(void *buffer, unsigned long length) {
+unsigned long pop_data(void *buffer, unsigned long length, int part_mode) {
     unsigned long ret = 0;
+    unsigned long count = 0;
     unsigned long size, head, tail = 0;
 
     spin_lock(&data_pipe_buffer_ctx.consumer_lock);
@@ -138,10 +142,12 @@ unsigned long pop_data(void *buffer, unsigned long length) {
     head = smp_load_acquire(&data_pipe_buffer_ctx.ring.head);
     tail = data_pipe_buffer_ctx.ring.tail;
 
-    if (CIRC_CNT(head, tail, size) >= length) {
-        ret = length;
-        memcpy(buffer, data_pipe_buffer_ctx.ring.buf + tail, length);
-        smp_store_release(&data_pipe_buffer_ctx.ring.tail, (tail + length) & (size - 1));
+    count = CIRC_CNT(head, tail, size);
+    ret = part_mode ? min(count, length) : (count >= length ? count : 0);
+
+    if (ret > 0) {
+        memcpy(buffer, data_pipe_buffer_ctx.ring.buf + tail, ret);
+        smp_store_release(&data_pipe_buffer_ctx.ring.tail, (tail + ret) & (size - 1));
     }
 
     spin_unlock(&data_pipe_buffer_ctx.consumer_lock);
