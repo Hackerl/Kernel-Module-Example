@@ -1,17 +1,17 @@
 # Kernel-Module-Example
 ## Prepare
 Please install linux headers first.
-```sh=
+```sh
 sudo apt install linux-headers-$(uname -r)
 ```
 ## Build
-```sh=
+```sh
 mkdir build; cd build
 cmake ..; make
 ```
 ## Test
 Require root.
-```sh=
+```sh
 insmod driver_demo.ko
 echo "hello world" > /proc/lkm_demo/data_pipe
 cat /proc/lkm_demo/data_pipe
