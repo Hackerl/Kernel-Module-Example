@@ -4,10 +4,11 @@
 #include <linux/circ_buf.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
+#include <linux/uaccess.h>
 
 int open_data_pipe(struct inode *node, struct file *f);
 ssize_t read_data_pipe(struct file *f, char __user *buffer, size_t count, loff_t *pos);
-int release_data_pipe(struct inode *node, struct file *f);
+ssize_t write_data_pipe(struct file *f, const char __user *buffer, size_t count, loff_t *pos);
 
 struct ring_buffer_ctx {
     unsigned long size;
@@ -22,7 +23,7 @@ static const struct file_operations data_pipe_fops = {
         .owner		= THIS_MODULE,
         .open		= open_data_pipe,
         .read		= read_data_pipe,
-        .release	= release_data_pipe,
+        .write      = write_data_pipe,
         .llseek		= no_llseek
 };
 
@@ -58,11 +59,41 @@ int open_data_pipe(struct inode *node, struct file *f) {
 }
 
 ssize_t read_data_pipe(struct file *f, char __user *buffer, size_t count, loff_t *pos) {
-    return 0;
+    ssize_t ret = 0;
+    void *cache_buffer = NULL;
+
+    cache_buffer = kzalloc(count, GFP_KERNEL);
+
+    ret = pop_data(cache_buffer, count);
+
+    if (ret > 0) {
+        ret = copy_to_user(buffer, cache_buffer, count) == 0 ? ret : 0;
+    }
+
+    if (cache_buffer) {
+        kfree(cache_buffer);
+        cache_buffer = NULL;
+    }
+
+    return ret;
 }
 
-int release_data_pipe(struct inode *node, struct file *f) {
-    return 0;
+ssize_t write_data_pipe(struct file *f, const char __user *buffer, size_t count, loff_t *pos) {
+    ssize_t ret = 0;
+    void *cache_buffer = NULL;
+
+    cache_buffer = kzalloc(count, GFP_KERNEL);
+
+    if (copy_from_user(cache_buffer, buffer, count) == 0) {
+        ret = push_data(cache_buffer, count);
+    }
+
+    if (cache_buffer) {
+        kfree(cache_buffer);
+        cache_buffer = NULL;
+    }
+
+    return ret;
 }
 
 int cleanup_data_pipe(const char *name) {
